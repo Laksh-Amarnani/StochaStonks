@@ -3,5 +3,5 @@ numpy
 pandas
 matplotlib
 seaborn
-y-finance
+yfinance
 scipy
