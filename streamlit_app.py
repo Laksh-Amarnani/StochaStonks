@@ -92,3 +92,50 @@ with st.sidebar:
 
     # Run Analysis button
     run_analysis = st.button("🚀 Run Analysis", type="primary")
+
+# Helper Functions
+@st.cache_data
+def fetch_stock_data(symbol, start, end):
+    """Fetch stock data from yahoo finance."""
+    try:
+        stock = yf.Ticker(symbol)
+        df = stock.history(start=start, end=end)
+        return df, stock.info
+    except Exception as e:
+        st.error(f"Error Fetching Data: {str(e)}")
+        return None, None
+    
+def calculate_returns(prices):
+    """Calculate daily returns."""
+    returns = np.log(prices / prices.shift(1))
+    return returns.dropna()
+
+def random_walk_simulation(initial_price, returns, days):
+    """Simple Random Walk Simulation."""
+    daily_returns = np.random.choice(returns, size=days)
+    price_path = [initial_price]
+
+    for ret in daily_returns:
+        price_path.append(price_path[-1] * np.exp(ret))
+
+    return np.array(price_path)
+
+def geometric_brownian_motion(S0, mu, sigma, T, dt, N):
+    """Geometric Brownian Motion Simulation."""
+    np.random.seed(None)
+    t = np.linspace(0, T, N)
+    W = np.random.standard_normal(size=N) 
+    W = np.cumsum(W)*np.sqrt(dt)  # Brownian motion
+    X = (mu - 0.5 * sigma**2) * t + sigma * W
+    S = S0 * np.exp(X)  # Geometric Brownian Motion
+    return S
+
+def monte_carlo_simulation(S0, mu, sigma, T, dt, num_sims):
+    """Monte Carlo Simulation Using Geometric Brownian Motion."""
+    N = int(T / dt)
+    simulations = np.zeros((num_sims, N))
+
+    for i in range(num_sims):
+        simulations[i] = geometric_brownian_motion(S0, mu, sigma, T, dt, N)
+
+    return simulations
