@@ -139,3 +139,30 @@ def monte_carlo_simulation(S0, mu, sigma, T, dt, num_sims):
         simulations[i] = geometric_brownian_motion(S0, mu, sigma, T, dt, N)
 
     return simulations
+
+# Main Analysis Section
+if run_analysis:
+    with st.spinner("Fetching stock data..."):
+        # Fetching Stock Data As per user input from yfinance
+        if len(date_range) == 2:
+            start, end = date_range
+            df, info = fetch_stock_data(stock_symbol, start, end)
+
+            if df is not None and not df.empty:
+                # Displaying the information of stock
+                col1, col2, col3, col4, = st.columns(4)
+
+                with col1:
+                    st.metric("Current Price", f"₹{df['Close'].iloc[-1]:.2f}")
+
+                with col2:
+                    change = ((df['Close'].iloc[-1] - df['Close'].iloc[0])/df['Close'].iloc[0]) * 100
+                    st.metric("Period Change", f"{change:.2f}%")
+                
+                with col3:
+                    st.metric("Highest", f"₹{df['High'].max():.2f}")
+
+                with col4:
+                    st.metric("Lowest", f"₹{df['Low'].min():.2f}")
+
+                st.mardown("---")
