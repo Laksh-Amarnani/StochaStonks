@@ -166,3 +166,173 @@ if run_analysis:
                     st.metric("Lowest", f"₹{df['Low'].min():.2f}")
 
                 st.mardown("---")
+
+                # Calculating Returns and statistics
+                prices = df['Close']
+                returns = calculate_returns(prices)
+
+                mu = returns.mean()
+                sigma = returns.std()
+
+                # Display Statistics of the data that is fetched.
+                st.markdown('<p class="sub-header">📊 Stock Statistics</p>', unsafe_allow_html=True)
+
+                col1, cols2 = st.columns(2)
+
+                with col1:
+                    st.markdown('<div class="info-box">', unsafe_allow_html=True)
+                    st.markdown("**Returns Statistics**")
+                    st.write(f"- Mean Daily Return (μ): {mu:.6f}")
+                    st.write(f"- Daily Volatility (σ): {sigma:.6f}")
+                    st.markdown(f"- Annual Return: {(mu*252):.2f}")
+                    st.markdown(f'- Annual Volatility: {(sigma*np.sqrt(252)):.2f}%')
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+                with cols2:
+                    st.markdown('<div class="info-box">', unsafe_allow_html=True)
+                    st.markdown("**Distribution Analysis**")
+                    st.markdown(f"- Skewness: {stats.skew(returns):.4f}")
+                    st.markdown(f"- Kurtosis: {stats.kurtosis(returns):.4f}")
+                    st.markdown(f"- Min Return: {returns.min():.4f}")
+                    st.markdown(f"- Max Return: {returns.max():.4f}")
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+                # Displaying the Price Plot of Historical Data
+                st.markdown('<p class="sub-header">📈 Historical Price Movement</p>', unsafe_allow_html=True)
+
+                fig, ax = plt.subplots(figsize=(12, 5))
+                ax.plot(df.index, df['Close'], linewidth=2, color='#1f77b4', label='Actual Price')
+                ax.fill_between(df.index, df['Close'], alpha=0.3, color='#1f77b4')
+                ax.set_xlabel('Date', fontsize=12)
+                ax.set_ylabel('Price (₹)', fontsize=12)
+                ax.set_title(f"{stock_symbol} - Historical Closing Price", fontsize=14, fontweight='bold')
+                ax.legend()
+                ax.grid(True, alpha=0.3)
+                st.pyplot(fig)
+
+                # Returns Distribution
+                st.markdown('<p class="sub-header">📊 Returns Distribution</p>', unsafe_allow_html=True)
+
+                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+
+                # Histogram of Returns
+                ax1.hist(returns, bins=50, density=True, alpha=0.7, color="#2ecc71", edgecolor='black')
+                mu_fit, sigma_fit = returns.mean(), returns.std()
+                x = np.linspace(returns.min(), returns.max(), 100)
+                ax1.plot(x, stats.norm.pdf(x, mu_fit, sigma_fit), 'r-', linewidth=2, label="Normal Distribution")
+                ax1.set_xlabel('Daily Return', fontsize=11)
+                ax1.set_ylabel('Frequency', fontsize=11)
+                ax1.set_title('Returns Distribution', fontsize=12, fontweight='bold')
+                ax1.legend()
+                ax1.grid(True, alpha=0.3)
+
+                # Q-Q Plot
+                stats.probplot(returns, dist="norm", plot=ax2)
+                ax2.set_title('Q-Q Plot', fontsize=12, fontweight='bold')
+                ax2.grid(True, alpha=0.3)
+
+                st.pyplot(fig)
+
+                # Stochastic Process Analysis
+                st.markdown("---")
+                st.markdown('<p class="sub-header">🎲 Stochastic Process Simulations</p>', unsafe_allow_html=True)
+
+                S0 = df['Close'].iloc[-1]
+                T = forecast_days / 252  # Convert days to years
+                dt = 1/252  # Daily time steps
+                N = forecast_days
+
+                # Random walks Shows it's magic here
+                if analysis_type in ["Random Walks", "All"]:
+                    st.markdown("### 🚶 Random Walk Simulation")
+
+                    with st.spinner("Running Random Walk Simulation..."):
+                        fig, ax = plt.subplots(figsize=(12, 6))
+
+                        for i in range(min(num_simulations, 100)):
+                            path = random_walk_simulation(S0, returns, forecast_days)
+                            ax.plot(path, alpha=0.3, linewidth=0.8, color='blue')
+
+                        # Plot actual historical data
+                        historical_days = len(prices)
+                        ax.axvline(x=0, color='red', linestyle='--', linewidth=2, label='Forecast Start')
+                        ax.set_xlabel('Days', fontsize=12)
+                        ax.set_ylabel('Price (₹)', fontsize=12)
+                        ax.set_title(f'Random Walk Simulation ({num_simulations} paths)', fontsize=14, fontweight='bold')
+                        ax.legend()
+                        ax.grid(True, alpha=0.3)
+
+                        st.pyplot(fig)
+
+                        st.info("📝 **Random Walk:** Assumes future price movements are independent and equally likely to go up or down based on historical returns.")
+                
+                # Geometric Brownian Motion Simulation
+                if analysis_type in ["Geometric Brownian Motion", "All"]:
+                    st.markdown("### 📈 Geometric Brownian Motion (GBM)")
+
+                    with st.spinner("Running Geometric Brownian Motion Simulation..."):
+                        fig, ax = plt.subplots(figsize=(12, 6))
+                        
+                        for i in range(min(num_simulations, 100)):
+                            path = geometric_brownian_motion(S0, mu, sigma, T, dt, N)
+                            ax.plot(path, alpha=0.3, linewidth=0.8, color='green')
+
+                        ax.axhline(y=S0, color='red', linestyle='--', linewidth=2, label='Current Price')
+
+                        ax.set_xlabel('Days', fontsize=12)
+                        ax.set_ylabel('Price (₹)', fontsize=12)
+                        ax.set_title(f'Geometric Brownian Motion ({num_simulations} paths)', fontsize=14, fontweight='bold')
+                        ax.legend()
+                        ax.grid(True, alpha=0.3)
+                        st.pyplot(fig)
+
+                        st.info("📝 **GBM:** Assumes returns are log-normally distributed. Commonly used in Black-Scholes option pricing model.")
+
+                # Monte Carlo Simulation
+                if analysis_type in ["Monte Carlo Simulation", "All"]:
+                    st.markdown("### 🎰 Monte Carlo Simulation")
+
+                    with st.spinner("Running Monte Carlo Simulation..."):
+                        simulations = monte_carlo_simulation(S0, mu, sigma, T, dt, num_simulations)
+
+                        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+
+                        for i in range(min(num_simulations, 100)):
+                            ax1.plot(simulations[i], alpha=0.3, linewidth=0.8, color='purple')
+                            
+                        mean_path = simulations.mean(axis=0)
+                        ax1.plot(mean_path, color='red', linewidth=3, label='Mean Path')
+                        ax1.axhline(y=S0, color='red', linestyle='--', linewidth=2, label='Current Price')
+                        
+                        ax1.set_xlabel('Days', fontsize=12)
+                        ax1.set_ylabel('Price (₹)', fontsize=12)
+                        ax1.set_title(f'Monte Carlo Simulation ({num_simulations} paths)', fontsize=14, fontweight='bold')
+                        ax1.legend()
+                        ax1.grid(True, alpha=0.3)
+                        
+                        # Distribution of final prices
+                        final_prices = simulations[:, -1]
+                        ax2.hist(final_prices, bins=50, density=True, alpha=0.7, color='purple', edgecolor='black')
+                        ax2.axvline(x=S0, color='orange', linestyle='--', linewidth=2, label='Current Price')
+                        ax2.axvline(x=mean_path[-1], color='red', linewidth=2, label='Mean Final Price')
+                        ax2.set_xlabel(f'Price after {forecast_days} days (₹)', fontsize=11)
+                        ax2.set_ylabel('Probability Density', fontsize=11)
+                        ax2.set_title('Distribution of Final Prices', fontsize=13, fontweight='bold')
+                        ax2.legend()
+                        ax2.grid(True, alpha=0.3)
+
+                        st.pyplot(fig)
+
+                        # Statistics 
+                        col1, col2, col3 = st.columns(3)
+
+                        with col1:
+                            st.metric("Mean Final Price", f"₹{final_prices.mean():.2f}")
+                        with col2:
+                            percentile_5 = np.percentile(final_prices, 5)
+                            st.metric("5% Percentile (VaR)", f"₹{percentile_5:.2f}")
+                        with col3:
+                            percentile_95 = np.percentile(final_prices, 95)
+                            st.metric("95% Percentile", f"₹{percentile_95:.2f}")
+
+                        st.info("📝 **Monte Carlo:** Uses repeated random sampling to obtain numerical results. Provides probability distribution of possible outcomes.")
