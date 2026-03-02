@@ -336,3 +336,29 @@ if run_analysis:
                             st.metric("95% Percentile", f"₹{percentile_95:.2f}")
 
                         st.info("📝 **Monte Carlo:** Uses repeated random sampling to obtain numerical results. Provides probability distribution of possible outcomes.")
+
+                    # key Insights
+                    st.markdown("---")
+                    st.markdown('<p class="sub-header">💡 Key Insights</p>', unsafe_allow_html=True)              
+
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write("**✅ Model Assumptions:**")
+                        st.write("- Markets are continuous and frictionless.")
+                        st.write("- Returns are normally distributed.")
+                        st.write("- No arbitrage opportunities.")
+                        st.write("- Constant volatility (simplified).")
+
+                    with col2:
+                        st.write("**⚠️ Limitations:**")
+                        st.write("- Real markets have jumps and gaps.")
+                        st.write("- Volatility changes over time.")
+                        st.write("- Ignores market microstructure.")
+                        st.write("- Past performance ≠ future results")
+
+            else:
+                st.error("❌ Unable to fetch data. Please check the stock symbol and try again.")
+        else:
+            st.warning("⚠️ Please select both start and end dates.")
+    
