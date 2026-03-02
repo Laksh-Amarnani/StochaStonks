@@ -362,3 +362,12 @@ if run_analysis:
         else:
             st.warning("⚠️ Please select both start and end dates.")
     
+# Footer
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center; color: #7f8c8d; padding: 20px;'>
+    <p><strong>StochaStonks - Stochastic Processes and Applications</strong></p>
+    <p>MPSTME, NMIMS | Mukesh Patel School of Technology Management & Engineering</p>
+    <p><em>Disclaimer: This is an academic project. Not financial advice.</em></p>
+</div>
+""", unsafe_allow_html=True)
