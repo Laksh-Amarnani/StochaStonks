@@ -53,7 +53,6 @@ st.markdown("---")
 
 # Sidebar
 with st.sidebar:
-    st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Line_chart.svg/1200px-Line_chart.svg.png", width=100)
     st.markdown("## 🎯 Project Settings")
     
     # Stock selection
@@ -83,8 +82,16 @@ with st.sidebar:
     st.markdown("### 📊 Analysis Type")
     analysis_type = st.selectbox(
         "Choose Analysis",
-        ["Random Walk", "Geometric Brownian Motion", "Monte Carlo Simulation", "All"]
+        ["Random Walk", "Geometric Brownian Motion", "Monte Carlo Simulation", "All", "🔥 Advanced Analysis"]
     )
+    
+    # Advanced options
+    if analysis_type == "🔥 Advanced Analysis":
+        st.markdown("### 🎯 Advanced Features")
+        show_confidence_cone = st.checkbox("Show Confidence Cone", value=True)
+        show_jump_diffusion = st.checkbox("Jump-Diffusion Model (Black Swan Events)", value=False)
+        compare_models = st.checkbox("Compare All Models Side-by-Side", value=True)
+        stress_test = st.checkbox("Stress Test Scenarios", value=False)
     
     # Run analysis button
     run_analysis = st.button("🚀 Run Analysis", type="primary")
@@ -135,6 +142,97 @@ def monte_carlo_simulation(S0, mu, sigma, T, dt, num_sims):
         simulations[i] = geometric_brownian_motion(S0, mu, sigma, T, dt, N)
     
     return simulations
+
+def jump_diffusion_model(S0, mu, sigma, T, dt, N, jump_intensity=0.1, jump_mean=-0.05, jump_std=0.1):
+    """
+    Merton's Jump Diffusion Model - captures sudden market crashes/rallies
+    Models both continuous movements AND discrete jumps (Black Swan events)
+    
+    dS = μS dt + σS dW + S dJ
+    where dJ represents jump process (Poisson)
+    """
+    np.random.seed(None)
+    t = np.linspace(0, T, N)
+    dt_actual = T / N
+    
+    # Regular GBM component
+    W = np.random.standard_normal(size=N)
+    W = np.cumsum(W) * np.sqrt(dt_actual)
+    
+    # Jump component (Poisson process)
+    num_jumps = np.random.poisson(jump_intensity * T)
+    jump_times = np.random.uniform(0, N, num_jumps).astype(int)
+    jump_sizes = np.random.normal(jump_mean, jump_std, num_jumps)
+    
+    # Construct price path
+    X = (mu - 0.5 * sigma**2) * t + sigma * W
+    
+    # Add jumps
+    for i, jump_time in enumerate(jump_times):
+        if jump_time < N:
+            X[jump_time:] += jump_sizes[i]
+    
+    S = S0 * np.exp(X)
+    return S, jump_times, num_jumps
+
+def calculate_confidence_cone(simulations, confidence_levels=[0.05, 0.25, 0.5, 0.75, 0.95]):
+    """
+    Calculate confidence intervals over time
+    Shows the 'cone of uncertainty' expanding into the future
+    """
+    percentiles = {}
+    for level in confidence_levels:
+        percentiles[level] = np.percentile(simulations, level * 100, axis=0)
+    return percentiles
+
+def stress_test_scenarios(S0, returns, forecast_days):
+    """
+    Stress test under extreme scenarios
+    - 2008 Financial Crisis scenario
+    - COVID-19 Crash scenario
+    - Bull Market scenario
+    """
+    scenarios = {}
+    
+    # Historical worst period volatility
+    worst_volatility = returns.std() * 2.5
+    worst_return = returns.mean() - 2 * returns.std()
+    
+    # Best period
+    best_volatility = returns.std() * 0.5
+    best_return = returns.mean() + returns.std()
+    
+    # Crisis scenario (like 2008)
+    crisis_path = []
+    price = S0
+    for _ in range(forecast_days):
+        ret = np.random.normal(worst_return, worst_volatility)
+        price *= np.exp(ret)
+        crisis_path.append(price)
+    scenarios['Crisis (2008-like)'] = np.array(crisis_path)
+    
+    # Bull market scenario
+    bull_path = []
+    price = S0
+    for _ in range(forecast_days):
+        ret = np.random.normal(best_return, best_volatility)
+        price *= np.exp(ret)
+        bull_path.append(price)
+    scenarios['Bull Market'] = np.array(bull_path)
+    
+    # Volatile scenario (like COVID)
+    volatile_path = []
+    price = S0
+    for i in range(forecast_days):
+        if i < forecast_days // 3:  # Crash phase
+            ret = np.random.normal(worst_return * 1.5, worst_volatility * 1.5)
+        else:  # Recovery phase
+            ret = np.random.normal(best_return * 0.7, returns.std())
+        price *= np.exp(ret)
+        volatile_path.append(price)
+    scenarios['COVID-like Crash & Recovery'] = np.array(volatile_path)
+    
+    return scenarios
 
 # Main Analysis Section
 if run_analysis:
@@ -514,6 +612,327 @@ if run_analysis:
                             st.metric("95% Percentile", f"₹{percentile_95:.2f}")
                         
                         st.info("📝 **Monte Carlo:** Uses repeated random sampling to obtain numerical results. Provides probability distribution of possible outcomes.")
+                
+                # 🔥 ADVANCED ANALYSIS SECTION
+                if analysis_type == "🔥 Advanced Analysis":
+                    st.markdown("---")
+                    st.markdown('<p class="sub-header">🔥 Advanced Stochastic Analysis</p>', unsafe_allow_html=True)
+                    st.markdown("*Going beyond basic models - capturing real market complexities*")
+                    
+                    # Confidence Cone Analysis
+                    if 'show_confidence_cone' not in locals():
+                        show_confidence_cone = True
+                    
+                    if show_confidence_cone:
+                        st.markdown("#### 📊 Confidence Cone - The Expanding Uncertainty")
+                        
+                        with st.spinner('Calculating confidence intervals...'):
+                            # Run simulations if not already done
+                            if 'simulations' not in locals():
+                                simulations = monte_carlo_simulation(S0, mu, sigma, T, dt, num_simulations)
+                            
+                            # Calculate percentiles
+                            percentiles = calculate_confidence_cone(simulations)
+                            
+                            fig = go.Figure()
+                            
+                            # Add confidence bands
+                            time_steps = list(range(len(simulations[0])))
+                            
+                            # 90% confidence interval (shaded)
+                            fig.add_trace(go.Scatter(
+                                x=time_steps + time_steps[::-1],
+                                y=list(percentiles[0.95]) + list(percentiles[0.05])[::-1],
+                                fill='toself',
+                                fillcolor='rgba(31, 119, 180, 0.2)',
+                                line=dict(color='rgba(255,255,255,0)'),
+                                name='90% Confidence',
+                                hoverinfo='skip'
+                            ))
+                            
+                            # 50% confidence interval (darker)
+                            fig.add_trace(go.Scatter(
+                                x=time_steps + time_steps[::-1],
+                                y=list(percentiles[0.75]) + list(percentiles[0.25])[::-1],
+                                fill='toself',
+                                fillcolor='rgba(31, 119, 180, 0.4)',
+                                line=dict(color='rgba(255,255,255,0)'),
+                                name='50% Confidence',
+                                hoverinfo='skip'
+                            ))
+                            
+                            # Median path
+                            fig.add_trace(go.Scatter(
+                                x=time_steps,
+                                y=percentiles[0.5],
+                                mode='lines',
+                                name='Median Forecast',
+                                line=dict(color='red', width=3)
+                            ))
+                            
+                            # Current price
+                            fig.add_hline(y=S0, line_dash="dash", line_color="orange",
+                                        annotation_text=f"Current: ₹{S0:.2f}")
+                            
+                            fig.update_layout(
+                                title='Confidence Cone - How Uncertainty Grows Over Time',
+                                xaxis_title='Days into Future',
+                                yaxis_title='Price (₹)',
+                                template='plotly_white',
+                                height=600,
+                                hovermode='x unified'
+                            )
+                            
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            # Explanation with metrics
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                uncertainty_today = percentiles[0.95][0] - percentiles[0.05][0]
+                                st.metric("Uncertainty Today", f"₹{uncertainty_today:.2f}")
+                            with col2:
+                                uncertainty_future = percentiles[0.95][-1] - percentiles[0.05][-1]
+                                st.metric(f"Uncertainty Day {forecast_days}", f"₹{uncertainty_future:.2f}")
+                            with col3:
+                                uncertainty_growth = ((uncertainty_future - uncertainty_today) / uncertainty_today) * 100
+                                st.metric("Uncertainty Growth", f"{uncertainty_growth:.1f}%")
+                            
+                            st.info("📝 **Confidence Cone:** Shows how prediction uncertainty expands over time. The 'cone' widens because more time = more possible outcomes. This is why long-term predictions are less reliable!")
+                    
+                    # Jump-Diffusion Model
+                    if 'show_jump_diffusion' not in locals():
+                        show_jump_diffusion = False
+                        
+                    if show_jump_diffusion:
+                        st.markdown("#### ⚡ Jump-Diffusion Model - Black Swan Events")
+                        
+                        with st.spinner('Simulating jump processes...'):
+                            fig = go.Figure()
+                            
+                            # Regular GBM for comparison
+                            regular_path = geometric_brownian_motion(S0, mu, sigma, T, dt, N)
+                            fig.add_trace(go.Scatter(
+                                x=list(range(len(regular_path))),
+                                y=regular_path,
+                                mode='lines',
+                                name='Regular GBM (No Jumps)',
+                                line=dict(color='green', width=2, dash='dash'),
+                                opacity=0.6
+                            ))
+                            
+                            # Multiple jump-diffusion paths
+                            for i in range(5):
+                                path, jump_times, num_jumps = jump_diffusion_model(
+                                    S0, mu, sigma, T, dt, N,
+                                    jump_intensity=3,  # ~3 jumps per year on average
+                                    jump_mean=-0.05,   # Average 5% drop per jump
+                                    jump_std=0.08      # But can vary ±8%
+                                )
+                                
+                                fig.add_trace(go.Scatter(
+                                    x=list(range(len(path))),
+                                    y=path,
+                                    mode='lines',
+                                    name=f'Path {i+1} ({num_jumps} jumps)',
+                                    line=dict(width=2),
+                                    opacity=0.7
+                                ))
+                                
+                                # Mark jump locations
+                                if len(jump_times) > 0:
+                                    fig.add_trace(go.Scatter(
+                                        x=jump_times,
+                                        y=[path[min(jt, len(path)-1)] for jt in jump_times],
+                                        mode='markers',
+                                        name=f'Jumps (Path {i+1})',
+                                        marker=dict(
+                                            size=12,
+                                            symbol='x',
+                                            color='red',
+                                            line=dict(width=2)
+                                        ),
+                                        showlegend=(i == 0)
+                                    ))
+                            
+                            fig.update_layout(
+                                title='Jump-Diffusion: Modeling Market Crashes & Sudden Events',
+                                xaxis_title='Days',
+                                yaxis_title='Price (₹)',
+                                template='plotly_white',
+                                height=600,
+                                hovermode='closest'
+                            )
+                            
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            st.warning("⚡ **Jump-Diffusion Model:** Unlike regular GBM, this model includes sudden jumps to capture market crashes, flash crashes, and unexpected news events. The red X marks show when 'Black Swan' events occurred. This is Merton's model - more realistic than basic GBM!")
+                    
+                    # Model Comparison
+                    if 'compare_models' not in locals():
+                        compare_models = True
+                        
+                    if compare_models:
+                        st.markdown("#### 🔬 Model Comparison - Which Performs Best?")
+                        
+                        with st.spinner('Comparing all models...'):
+                            fig = go.Figure()
+                            
+                            # Generate one path from each model
+                            rw_path = random_walk_simulation(S0, returns, forecast_days)
+                            gbm_path = geometric_brownian_motion(S0, mu, sigma, T, dt, N)
+                            jd_path, _, _ = jump_diffusion_model(S0, mu, sigma, T, dt, N)
+                            mc_mean = simulations.mean(axis=0)
+                            
+                            # Plot all on same chart
+                            fig.add_trace(go.Scatter(
+                                x=list(range(len(rw_path))),
+                                y=rw_path,
+                                mode='lines',
+                                name='Random Walk',
+                                line=dict(color='blue', width=2)
+                            ))
+                            
+                            fig.add_trace(go.Scatter(
+                                x=list(range(len(gbm_path))),
+                                y=gbm_path,
+                                mode='lines',
+                                name='Geometric Brownian Motion',
+                                line=dict(color='green', width=2)
+                            ))
+                            
+                            fig.add_trace(go.Scatter(
+                                x=list(range(len(jd_path))),
+                                y=jd_path,
+                                mode='lines',
+                                name='Jump-Diffusion',
+                                line=dict(color='red', width=2)
+                            ))
+                            
+                            fig.add_trace(go.Scatter(
+                                x=list(range(len(mc_mean))),
+                                y=mc_mean,
+                                mode='lines',
+                                name='Monte Carlo Mean',
+                                line=dict(color='purple', width=3, dash='dot')
+                            ))
+                            
+                            fig.add_hline(y=S0, line_dash="dash", line_color="orange",
+                                        annotation_text=f"Starting: ₹{S0:.2f}")
+                            
+                            fig.update_layout(
+                                title='Model Comparison - Different Approaches, Different Results',
+                                xaxis_title='Days',
+                                yaxis_title='Price (₹)',
+                                template='plotly_white',
+                                height=600,
+                                hovermode='x unified'
+                            )
+                            
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            # Comparison table
+                            comparison_data = {
+                                'Model': ['Random Walk', 'GBM', 'Jump-Diffusion', 'Monte Carlo'],
+                                'Final Price': [
+                                    f"₹{rw_path[-1]:.2f}",
+                                    f"₹{gbm_path[-1]:.2f}",
+                                    f"₹{jd_path[-1]:.2f}",
+                                    f"₹{mc_mean[-1]:.2f}"
+                                ],
+                                'Change %': [
+                                    f"{((rw_path[-1] - S0) / S0 * 100):.2f}%",
+                                    f"{((gbm_path[-1] - S0) / S0 * 100):.2f}%",
+                                    f"{((jd_path[-1] - S0) / S0 * 100):.2f}%",
+                                    f"{((mc_mean[-1] - S0) / S0 * 100):.2f}%"
+                                ],
+                                'Best For': [
+                                    'Simple analysis',
+                                    'Option pricing',
+                                    'Risk management',
+                                    'Uncertainty quantification'
+                                ]
+                            }
+                            
+                            st.dataframe(comparison_data, use_container_width=True, hide_index=True)
+                            
+                            st.info("📝 **Key Insight:** Different models give different results because they make different assumptions. In reality, markets combine all these effects - random walks, trends, AND sudden jumps!")
+                    
+                    # Stress Testing
+                    if 'stress_test' not in locals():
+                        stress_test = False
+                        
+                    if stress_test:
+                        st.markdown("#### 🚨 Stress Test - Extreme Scenarios")
+                        
+                        with st.spinner('Running stress tests...'):
+                            scenarios = stress_test_scenarios(S0, returns, forecast_days)
+                            
+                            fig = go.Figure()
+                            
+                            # Plot each scenario
+                            colors = {'Crisis (2008-like)': 'red', 
+                                    'Bull Market': 'green',
+                                    'COVID-like Crash & Recovery': 'orange'}
+                            
+                            for scenario_name, path in scenarios.items():
+                                fig.add_trace(go.Scatter(
+                                    x=list(range(len(path))),
+                                    y=path,
+                                    mode='lines',
+                                    name=scenario_name,
+                                    line=dict(color=colors[scenario_name], width=3)
+                                ))
+                            
+                            # Add normal forecast for reference
+                            normal_path = geometric_brownian_motion(S0, mu, sigma, T, dt, N)
+                            fig.add_trace(go.Scatter(
+                                x=list(range(len(normal_path))),
+                                y=normal_path,
+                                mode='lines',
+                                name='Normal Forecast',
+                                line=dict(color='blue', width=2, dash='dash')
+                            ))
+                            
+                            fig.add_hline(y=S0, line_dash="dash", line_color="gray",
+                                        annotation_text=f"Today: ₹{S0:.2f}")
+                            
+                            fig.update_layout(
+                                title='Stress Test - How Would This Stock Perform in Extreme Scenarios?',
+                                xaxis_title='Days',
+                                yaxis_title='Price (₹)',
+                                template='plotly_white',
+                                height=600,
+                                hovermode='x unified'
+                            )
+                            
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            # Scenario metrics
+                            col1, col2, col3 = st.columns(3)
+                            
+                            with col1:
+                                crisis_final = scenarios['Crisis (2008-like)'][-1]
+                                crisis_loss = ((crisis_final - S0) / S0) * 100
+                                st.metric("Crisis Scenario", 
+                                        f"₹{crisis_final:.2f}",
+                                        f"{crisis_loss:.1f}%",
+                                        delta_color="inverse")
+                            
+                            with col2:
+                                bull_final = scenarios['Bull Market'][-1]
+                                bull_gain = ((bull_final - S0) / S0) * 100
+                                st.metric("Bull Market", 
+                                        f"₹{bull_final:.2f}",
+                                        f"+{bull_gain:.1f}%")
+                            
+                            with col3:
+                                covid_final = scenarios['COVID-like Crash & Recovery'][-1]
+                                covid_change = ((covid_final - S0) / S0) * 100
+                                st.metric("COVID-like", 
+                                        f"₹{covid_final:.2f}",
+                                        f"{covid_change:+.1f}%")
+                            
+                            st.warning("🚨 **Stress Testing:** Banks and hedge funds run these tests to see how portfolios would perform in extreme scenarios. This is required by regulators after 2008! It shows your maximum potential loss in a crisis.")
                 
                 # Key Insights
                 st.markdown("---")
