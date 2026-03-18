@@ -1,0 +1,18 @@
+--------- 18-03-2026 ---------
+
+Add a new functionality to calculate mean of 7 days and 22 days which is usually used in stock related projects
+in short we need to add rolling mean of number of days like 7 or 22
+
+Add a new functionality to calculate std of 14 days which is usually used in stock related projects This is really important to add
+in short we need to add rolling std of number of days like 14 to check the variance
+
+add montly average
+add montly high
+add montly low
+
+how many days above mean
+how many days below mean
+
+cumulative returns
+
+add depreciation and even streak-max and streak-con
