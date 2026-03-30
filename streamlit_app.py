@@ -58,6 +58,16 @@ st.markdown("""
 st.markdown('<p class="main-header">📈 StochaStonks</p>', unsafe_allow_html=True)
 st.markdown('<p style="text-align: center; color: #7f8c8d; font-size: 1.2rem; margin-top: -15px;">Stochastic Process Analyzer for Financial Markets</p>', unsafe_allow_html=True)
 st.markdown("### MPSTME - NMIMS | STPA Project")
+
+# Rate Limit Info Box
+st.info("""
+⏰ **Note on Data Fetching:**
+- First analysis may take 10-20 seconds (fetching live data)
+- Subsequent analyses are instant (cached for 2 hours)
+- **Best stocks to try:** RELIANCE.NS, TCS.NS, INFY.NS, ^NSEI
+- If you see rate limit error: Wait 2 minutes, then try again
+""")
+
 st.markdown("---")
 
 # Sidebar
@@ -74,12 +84,13 @@ with st.sidebar:
     # Date range
     st.markdown("### 📅 Date Range")
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=365)
+    start_date = end_date - timedelta(days=180)  # 6 months instead of 1 year
     
     date_range = st.date_input(
         "Select period",
         value=(start_date, end_date),
-        max_value=end_date
+        max_value=end_date,
+        help="Shorter periods = faster loading. Recommended: 3-6 months"
     )
     
     # Simulation parameters
@@ -105,43 +116,54 @@ with st.sidebar:
     # Run analysis button
     run_analysis = st.button("🚀 Run Analysis", type="primary")
 
-# Helper Functions with Rate Limiting
-@st.cache_data(ttl=3600, show_spinner=False)
-def fetch_stock_data_with_retry(symbol, start, end, max_retries=3):
-    """Fetch stock data with retry logic and rate limiting"""
+# Helper Functions with Improved Rate Limiting
+@st.cache_data(ttl=7200, show_spinner=False)  # Cache for 2 hours instead of 1
+def fetch_stock_data_with_retry(symbol, start, end, max_retries=5):  # Increased retries
+    """Fetch stock data with aggressive retry logic and rate limiting"""
     for attempt in range(max_retries):
         try:
             if attempt > 0:
-                time.sleep(2 ** attempt)
+                wait_time = min(2 ** attempt, 32)  # Exponential backoff, max 32 seconds
+                st.info(f"⏳ Retry {attempt}/{max_retries} - Waiting {wait_time}s to avoid rate limit...")
+                time.sleep(wait_time)
             
-            stock = yf.Ticker(symbol)
-            df = stock.history(start=start, end=end, timeout=10)
+            # Try different methods
+            if attempt < 3:
+                # Method 1: Standard Ticker
+                stock = yf.Ticker(symbol)
+                df = stock.history(start=start, end=end, timeout=15)
+            else:
+                # Method 2: Download (more reliable for rate limits)
+                df = yf.download(symbol, start=start, end=end, progress=False, timeout=15)
             
             if df.empty:
-                return None, None, f"No data available for {symbol}"
+                return None, None, f"No data available for {symbol}. Try different dates or symbol."
             
             try:
-                info = stock.info
+                info = {"symbol": symbol}  # Minimal info to avoid extra API calls
             except:
                 info = {"symbol": symbol}
             
             return df, info, None
             
         except Exception as e:
-            error_msg = str(e)
+            error_msg = str(e).lower()
             
-            if "429" in error_msg or "Too Many Requests" in error_msg:
+            # Check for rate limit
+            if "429" in error_msg or "rate limit" in error_msg or "too many request" in error_msg:
                 if attempt < max_retries - 1:
+                    st.warning(f"⚠️ Rate limit hit. Automatically retrying in {2 ** (attempt + 1)}s...")
                     continue
                 else:
-                    return None, None, "Rate limit exceeded. Please try again in a few minutes."
+                    return None, None, "🚫 **Rate Limit Exceeded**\n\n**Solutions:**\n- Wait 2-3 minutes\n- Try different stock: TCS.NS, INFY.NS, HDFCBANK.NS\n- Use shorter date range (3-6 months)\n- Clear browser cache and refresh"
             
+            # Other errors
             if attempt < max_retries - 1:
                 continue
             else:
-                return None, None, f"Error: {error_msg}"
+                return None, None, f"❌ Error after {max_retries} attempts: {str(e)[:100]}"
     
-    return None, None, "Failed to fetch data after multiple attempts"
+    return None, None, "Failed to fetch data. Please wait 2 minutes and try again."
 
 def calculate_returns(prices):
     """Calculate daily returns"""
@@ -254,7 +276,42 @@ if run_analysis:
             
             if error:
                 st.error(f"❌ {error}")
-                st.info("💡 **Troubleshooting:** Wait 1-2 minutes and try again, or use TCS.NS, INFY.NS")
+                
+                # Detailed troubleshooting
+                with st.expander("🔧 Troubleshooting Guide - Click to Expand"):
+                    st.markdown("""
+                    ### Why This Happens:
+                    Yahoo Finance limits how many requests can be made. Streamlit Cloud shares IPs, so limits are hit faster.
+                    
+                    ### Quick Fixes:
+                    
+                    **Option 1: Wait & Retry (Recommended)**
+                    1. Wait 2-3 minutes ⏰
+                    2. Click "Run Analysis" again
+                    3. Data is cached for 2 hours after success!
+                    
+                    **Option 2: Try Different Stock**
+                    - RELIANCE.NS ✅ (Usually works)
+                    - TCS.NS ✅ (Very reliable)
+                    - INFY.NS ✅ (Good alternative)
+                    - HDFCBANK.NS ✅
+                    - ^NSEI ✅ (Nifty 50 Index)
+                    
+                    **Option 3: Reduce Data Range**
+                    - Change date range to 3 months instead of 6
+                    - Less data = faster loading
+                    
+                    **Option 4: Browser Cache**
+                    - Press Ctrl+Shift+R (hard refresh)
+                    - Or click ⋮ menu → Clear cache
+                    
+                    ### For Presentation Demo:
+                    1. Load stock BEFORE presenting
+                    2. Once loaded, it's cached for 2 hours
+                    3. All analyses will be instant!
+                    """)
+                
+                st.info("💡 **Pro Tip:** Once data loads successfully, all analyses are instant for 2 hours!")
                 
             elif df is not None and not df.empty:
                 st.success(f"✅ Data loaded for {stock_symbol}!")
@@ -436,12 +493,13 @@ if run_analysis:
                     monthly_display.index = monthly_display.index.strftime('%B %Y')
                     monthly_display = monthly_display.tail(6)
                     
+                    # Simple formatting without background_gradient (no matplotlib needed)
                     st.dataframe(
                         monthly_display.style.format({
                             'Monthly_Avg': '₹{:.2f}',
                             'Monthly_High': '₹{:.2f}',
                             'Monthly_Low': '₹{:.2f}'
-                        }).background_gradient(cmap='RdYlGn', subset=['Monthly_Avg']),
+                        }),
                         use_container_width=True
                     )
                 
