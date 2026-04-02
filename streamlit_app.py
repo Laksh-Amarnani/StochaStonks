@@ -347,7 +347,7 @@ if run_analysis:
                 df['STD_14'] = df['Close'].rolling(window=14).std()
                 
                 # Monthly Statistics
-                df_monthly = df['Close'].resample('M').agg(['mean', 'max', 'min'])
+                df_monthly = df['Close'].resample('ME').agg(['mean', 'max', 'min'])
                 df_monthly.columns = ['Monthly_Avg', 'Monthly_High', 'Monthly_Low']
                 
                 # Days Above/Below Mean
